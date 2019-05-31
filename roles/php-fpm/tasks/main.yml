@@ -1,0 +1,28 @@
+---
+- name: php-fpm パッケージをインストールする
+  apt: name={{ item }} state=present update_cache=yes
+  with_items:
+    - php
+    - php-gd
+    - php-fpm
+    - php-enchant
+    - php-mbstring
+    - php-mysql
+    - php-curl
+
+- name: WordPress 用 php の設定をする
+  lineinfile:
+    dest: /etc/php/7.2/fpm/php.ini
+    state: present
+    regexp: "^{{ item.before }} ="
+    insertafter: "^;{{ item.before }} ="
+    line: "{{ item.after }}"
+  with_items:
+    - { before: "post_max_size", after: "post_max_size = 128M" }
+    - { before: "upload_max_filesize", after: "upload_max_filesize = 128M" }
+    - { before: "default_charset", after: 'default_charset = "UTF-8"' }
+    - { before: "mbstring.language", after: "mbstring.language = Japanese" }
+    - { before: "date.timezone", after: 'date.timezone = "Asia/Tokyo"' }
+    - { before: "sendmail_path", after: 'sendmail_path = /usr/sbin/sendmail -t -i' }
+  notify:
+    - restart php7.2-fpm

@@ -1,0 +1,24 @@
+---
+- name: 基本パッケージをインストールする
+  apt: name={{ item }} state=present update_cache=yes
+  with_items:
+    - ufw
+    - language-pack-ja
+    - git
+    - vim
+    - curl
+    - wget
+    - rsync
+    - ntp
+    
+- name: タイムゾーンを Asia/Tokyo にする
+  timezone: name="Asia/Tokyo"
+
+- name: エディタをvimにする
+  alternatives: name=editor path=/usr/bin/vim.basic
+
+- name: ファイアウォールを設定する
+  ufw:
+    state: enabled
+    rule: allow
+    name: OpenSSH

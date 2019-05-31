@@ -1,0 +1,83 @@
+---
+- name: 必要なパッケージをインストールする
+  apt: name={{ item }} state=present update_cache=yes
+  with_items:
+    - python-pip
+    - libmysqlclient-dev
+
+- pip: name={{ item }} state=present
+  with_items:
+    - MySQL-python
+
+- name: WordPress データーベースを作成する
+  mysql_db:
+    name: "{{ wordpress.db_name }}"
+    collation: utf8_general_ci
+    state: present
+
+- name: WordPress データーベースユーザーを作成する
+  mysql_user:
+    name: "{{ wordpress.db_user }}"
+    password: "{{ wordpress.db_password }}"
+    priv: "{{ wordpress.db_name }}.*:ALL"
+    host: localhost
+    state: present
+
+- name: WordPress 配置済みか確認する
+  stat:
+    path: /usr/share/nginx/www/wordpress-sample/wp-config.php
+  register: wp_config
+
+- name: /usr/share/nginx/www/wordpress-sample ディレクトリを作成する
+  file:
+    path: /usr/share/nginx/www/wordpress-sample
+    state: directory
+    owner: www-data
+    group: www-data
+  when: not wp_config.stat.exists
+
+- name: 作業用のディレクトリを作る
+  tempfile:
+    state: directory
+    prefix: ansible-work
+  register: work
+  when: not wp_config.stat.exists
+
+- name: https://ja.wordpress.org/releases/{{ wordpress.version }}-ja.tar.gz のダウンロード
+  get_url:
+    url: http://ja.wordpress.org/wordpress-{{ wordpress.version }}-ja.tar.gz
+    dest: "{{ work.path }}/wordpress-{{ wordpress.version }}-ja.tar.gz"
+    checksum: "{{ wordpress.checksum }}"
+  when: not wp_config.stat.exists
+
+- name: WordPress {{ wordpress.version }} を解凍する
+  unarchive:
+    src: "{{ work.path }}/wordpress-{{ wordpress.version }}-ja.tar.gz"
+    dest: "{{ work.path }}"
+    copy: no
+  when: not wp_config.stat.exists
+
+- name: WordPress {{ wordpress.version }} を /usr/share/nginx/www/wordpress-sample へ配置する
+  shell: "cp -fr {{ work.path}}/wordpress/* /usr/share/nginx/www/wordpress-sample; chown -R www-data:www-data /usr/share/nginx/www/wordpress-sample/*"
+  when: not wp_config.stat.exists
+
+- name: wordpress.org の秘密鍵生成サービスから認証キーを得る
+  register: wp_salt
+  uri:
+    url: https://api.wordpress.org/secret-key/1.1/salt/
+    status_code: 200
+    return_content: yes
+  when: not wp_config.stat.exists
+
+- name: "wp-config.php の設定をする"
+  template:
+    src: wp-config.php.j2
+    dest: "/usr/share/nginx/www/wordpress-sample/wp-config.php"
+    owner: www-data
+    group: www-data
+    mode: 0600
+  when: not wp_config.stat.exists
+
+- name: Start php7.2-fpm Service
+  service: name=php7.2-fpm state=started enabled=yes
+  when: not wp_config.stat.exists

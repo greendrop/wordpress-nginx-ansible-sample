@@ -1,0 +1,10 @@
+---
+mariadb:
+  root_password: "clZeXX3L"
+
+wordpress:
+  version: 4.9.2
+  checksum: md5:84fead78b678cf153646c7ee4d4b73e3
+  db_name: wordpressdb
+  db_user: wordpress
+  db_password: "3yMr17EJ"

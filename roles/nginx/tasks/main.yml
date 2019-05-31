@@ -1,0 +1,63 @@
+---
+- name: 必要なパッケージをインストールする
+  apt: name={{ item }} state=present update_cache=yes
+  with_items:
+    - nginx
+    - apache2-utils
+
+- name: 証明書ファイル用のディレクトリを作成する
+  file: path={{ item.path }} owner=root group=root mode=755 state=directory
+  with_items:
+    - { path: '/etc/nginx/ssl/wordpress-sample' }
+
+- name: 自己署名証明書ファイルを配置する
+  copy: src={{ item.src }} dest={{ item.dest }} owner=root group=root mode=0644
+  with_items:
+    - { src: 'ssl/server.crt', dest: '/etc/nginx/ssl/' }
+    - { src: 'ssl/server.csr', dest: '/etc/nginx/ssl/' }
+    - { src: 'ssl/server.key', dest: '/etc/nginx/ssl/' }
+
+- name: SSL証明書発行済みか確認する
+  stat:
+    path: /etc/letsencrypt/live/wordpress-sample
+  register: ssl
+
+- name: 証明書ファイルのシンボリックリンクを作成する
+  file: src={{ item.src }} dest={{ item.dest }} owner=root group=root mode=0644 state=link
+  with_items:
+    - { src: '/etc/nginx/ssl/server.crt', dest: '/etc/nginx/ssl/wordpress-sample/ssl_certificate' }
+    - { src: '/etc/nginx/ssl/server.key', dest: '/etc/nginx/ssl/wordpress-sample/ssl_certificate_key' }
+  when: not ssl.stat.exists
+
+- name: Basic認証用ファイルを作成する
+  become: yes
+  shell: |
+    rm -f /etc/nginx/htpasswd_wordpress-sample
+    htpasswd -cb /etc/nginx/htpasswd_wordpress-sample wordpress-sample YYj4DE
+
+- name: Nginx default 設定ファイルを削除する
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: restart nginx
+
+- name: Nginx 設定ファイルを配置する
+  template: src={{ item.src }} dest={{ item.dest }}
+  with_items:
+    - { src: 'nginx.conf.j2', dest: '/etc/nginx/nginx.conf' }
+    - { src: 'wordpress-sample.j2', dest: '/etc/nginx/sites-available/wordpress-sample' }
+  notify: restart nginx
+
+- name: Nginx 設定ファイルのシンボリックリンクを作成する
+  file: src={{ item.src }} dest={{ item.dest }} owner=root group=root mode=0644 state=link
+  with_items:
+    - { src: '/etc/nginx/sites-available/wordpress-sample', dest: '/etc/nginx/sites-enabled/wordpress-sample' }
+  notify: restart nginx
+
+- name: TCP ポート 80/443 (http/https) を開く
+  ufw:
+    rule: allow
+    name: Nginx Full
+
+- name: nginx サービスを起動する
+  service: name=nginx state=started enabled=yes

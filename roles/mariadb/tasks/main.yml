@@ -1,0 +1,28 @@
+---
+- name: MariaDB パッケージをインストールする
+  apt: name={{ item }} state=present update_cache=yes
+  with_items:
+    - mariadb-server
+    - python-selinux
+    - python-semanage
+    - python-pip
+    - libmysqlclient-dev
+
+- pip: name={{ item }} state=present
+  with_items:
+    - MySQL-python
+
+- name: MariaDB の設定をする
+  template:
+    src: mysql.cnf.j2
+    dest: /etc/mysql/conf.d/mysql.cnf
+    mode: 0644
+
+- name: MariaDB サービスを起動する
+  service: name=mysql state=started enabled=yes
+
+- name: MariaDB の root アカウントのパスワードを設定する
+  mysql_user:
+    host: localhost
+    name: root
+    password: "{{ mariadb.root_password }}"
